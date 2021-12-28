@@ -35,7 +35,7 @@ export class MaxrchungCloudCdkStack extends cdk.Stack {
       'mongo',
     );
 
-    new ec2.Instance(this, 'database-ec2', {
+    const ec2Instance = new ec2.Instance(this, 'database-ec2', {
       instanceName: 'database-ec2',
       vpc,
       vpcSubnets: {
@@ -51,6 +51,10 @@ export class MaxrchungCloudCdkStack extends cdk.Stack {
         cpuType: ec2.AmazonLinuxCpuType.ARM_64,
       }),
       keyName: 'cloud-key', // Key was manually created through console
+    });
+
+    new ec2.CfnEIP(this, 'database-elastic-ip', {
+      instanceId: ec2Instance.instanceId
     });
 
     new s3.Bucket(this, 'database-backup', {
