@@ -146,7 +146,6 @@ export class MaxrchungCloudCdkStack extends cdk.Stack {
     const container = taskDefinition.addContainer('maxrchung-rails-container', {
       containerName: 'maxrchung-rails-container',
       image: ecs.ContainerImage.fromRegistry('maxrchung/maxrchung-rails'),
-      memoryLimitMiB: 512,
       environment: {
         AWS_ACCESS_KEY_ID: getParameter(this, 'maxrchung-aws-access-key-id'),
         AWS_DEFAULT_REGION: getParameter(this, 'maxrchung-aws-default-region'),
