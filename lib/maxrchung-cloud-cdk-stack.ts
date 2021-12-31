@@ -6,7 +6,7 @@ import * as certificatemanager from '@aws-cdk/aws-certificatemanager';
 import * as elbv2 from '@aws-cdk/aws-elasticloadbalancingv2';
 import * as ecs from '@aws-cdk/aws-ecs';
 import * as targets from '@aws-cdk/aws-route53-targets';
-import { Tag, Tags } from '@aws-cdk/core';
+import * as core from '@aws-cdk/core';
 
 export class MaxrchungCloudCdkStack extends cdk.Stack {
   constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
@@ -113,7 +113,7 @@ export class MaxrchungCloudCdkStack extends cdk.Stack {
       defaultAction: elbv2.ListenerAction.fixedResponse(404),
     });
 
-    Tags.of(balancer).add('balancer-identifier', 'cloud-balancer');
+    core.Tags.of(balancer).add('balancer-identifier', 'cloud-balancer');
 
     balancer.addListener('cloud-balancer-listener-http', {
       open: true,
