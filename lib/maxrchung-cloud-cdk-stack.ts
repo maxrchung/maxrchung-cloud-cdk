@@ -6,7 +6,7 @@ import * as certificatemanager from '@aws-cdk/aws-certificatemanager';
 import * as elbv2 from '@aws-cdk/aws-elasticloadbalancingv2';
 import * as ecs from '@aws-cdk/aws-ecs';
 import * as targets from '@aws-cdk/aws-route53-targets';
-import * as ssm from '@aws-cdk/aws-ssm';
+import { Tag, Tags } from '@aws-cdk/core';
 
 export class MaxrchungCloudCdkStack extends cdk.Stack {
   constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
@@ -95,19 +95,6 @@ export class MaxrchungCloudCdkStack extends cdk.Stack {
       domainName: 'maxrchung.com',
     });
 
-    const balancerSecurityGroup = new ec2.SecurityGroup(this, 'cloud-balancer-security-group', {
-      vpc,
-      allowAllOutbound: true,
-    });
-
-    balancerSecurityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(443),
-      'https',
-    );
-
-    balancer.addSecurityGroup(balancerSecurityGroup);
-
     const certificate = new certificatemanager.Certificate(this, 'maxrchung-certificate', {
       domainName: 'maxrchung.com',
       validation: certificatemanager.CertificateValidation.fromDns(hostedZone),
@@ -117,23 +104,16 @@ export class MaxrchungCloudCdkStack extends cdk.Stack {
       ]
     });
 
-    const targetGroup = new elbv2.ApplicationTargetGroup(this, 'maxrchung-rails-target-group', {
-      targetGroupName: 'maxrchung-rails-target-group',
-      port: 3000,
-      vpc,
-      protocol: elbv2.ApplicationProtocol.HTTP,
-    });
-
    balancer.addListener('cloud-balancer-listener-https', {
       open: true,
       protocol: elbv2.ApplicationProtocol.HTTPS,
       certificates: [
         certificate,
       ],
-      defaultTargetGroups: [
-        targetGroup,
-      ],
+      defaultAction: elbv2.ListenerAction.fixedResponse(404),
     });
+
+    Tags.of(balancer).add('balancer-identifier', 'cloud-balancer');
 
     balancer.addListener('cloud-balancer-listener-http', {
       open: true,
@@ -144,62 +124,9 @@ export class MaxrchungCloudCdkStack extends cdk.Stack {
       }),
     });
 
-    const cluster = new ecs.Cluster(this, 'cloud-cluster', {
+    new ecs.Cluster(this, 'cloud-cluster', {
       clusterName: 'cloud-cluster',
       vpc,
     });
-
-    const taskDefinition = new ecs.TaskDefinition(this, 'maxrchung-rails-task', {
-      family: 'maxrchung-rails-task',
-      compatibility: ecs.Compatibility.FARGATE,
-      cpu: '256',
-      memoryMiB: '512',
-    });
-
-    const container = taskDefinition.addContainer('maxrchung-rails-container', {
-      containerName: 'maxrchung-rails-container',
-      image: ecs.ContainerImage.fromRegistry('maxrchung/maxrchung-rails'),
-      environment: {
-        AWS_ACCESS_KEY_ID: ssm.StringParameter.valueForStringParameter(this, 'maxrchung-aws-access-key-id'),
-        AWS_DEFAULT_REGION: ssm.StringParameter.valueForStringParameter(this, 'maxrchung-aws-default-region'),
-        AWS_SECRET_ACCESS_KEY: ssm.StringParameter.valueForStringParameter(this, 'maxrchung-aws-secret-access-key'),
-        DATABASE_HOST: ssm.StringParameter.valueForStringParameter(this, 'cloud-database-host'),
-        DATABASE_PASSWORD: ssm.StringParameter.valueForStringParameter(this, 'cloud-database-password'),
-        SECRET_KEY_BASE: ssm.StringParameter.valueForStringParameter(this, 'maxrchung-rails-secret-key-base'),
-      },
-    });
-
-    container.addPortMappings({ containerPort: 3000 });
-
-    // Only allow fargate to talk with load balancer
-    const fargateSecurityGroup = new ec2.SecurityGroup(this, 'maxrchung-rails-fargate-security-group', {
-      securityGroupName: 'maxrchung-rails-fargate-security-group',
-      vpc,
-    });
-    
-    fargateSecurityGroup.connections.allowFrom(
-      balancerSecurityGroup,
-      ec2.Port.allTcp(),
-      'application load balancer'
-    );
-
-    fargateSecurityGroup.connections.allowTo(
-      balancerSecurityGroup,
-      ec2.Port.allTcp(),
-      'application load balancer'
-    );
-
-    const fargate = new ecs.FargateService(this, 'maxrchung-rails-fargate', {
-      serviceName: 'maxrchung-rails-fargate',
-      cluster,
-      desiredCount: 1,
-      taskDefinition,
-      securityGroups: [
-        fargateSecurityGroup
-      ],
-      assignPublicIp: true,
-    });
-
-    targetGroup.addTarget(fargate);
   }
 }
