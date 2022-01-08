@@ -77,6 +77,7 @@ export class MaxrchungCloudCdkStack extends cdk.Stack {
         subnetType: ec2.SubnetType.PUBLIC
       },
       internetFacing: true,
+      idleTimeout: cdk.Duration.hours(1), // For long running connections, e.g. THRUSTIN
     });
 
     const hostedZone = new route53.PublicHostedZone(this, 'maxrchung-hosted-zone', {
@@ -115,7 +116,7 @@ export class MaxrchungCloudCdkStack extends cdk.Stack {
         '*.maxrchung.com',
         '*.server.maxrchung.com',
         '*.api.maxrchung.com',
-      ]
+      ],
     });
 
    balancer.addListener('cloud-balancer-listener-https', {
