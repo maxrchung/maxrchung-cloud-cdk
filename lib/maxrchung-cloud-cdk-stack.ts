@@ -90,7 +90,19 @@ export class MaxrchungCloudCdkStack extends cdk.Stack {
     });
 
     new route53.CnameRecord(this, 'maxrchung-cname-record', {
-      recordName: '*.maxrchung.com', // Forwards all subdomains
+      recordName: '*.maxrchung.com',
+      zone: hostedZone,
+      domainName: 'maxrchung.com',
+    });
+
+    new route53.CnameRecord(this, 'maxrchung-cname-server-record', {
+      recordName: '*.server.maxrchung.com',
+      zone: hostedZone,
+      domainName: 'maxrchung.com',
+    });
+
+    new route53.CnameRecord(this, 'maxrchung-cname-api-record', {
+      recordName: '*.api.maxrchung.com',
       zone: hostedZone,
       domainName: 'maxrchung.com',
     });
@@ -101,6 +113,8 @@ export class MaxrchungCloudCdkStack extends cdk.Stack {
       subjectAlternativeNames: [
         'maxrchung.com',
         '*.maxrchung.com',
+        '*.server.maxrchung.com',
+        '*.api.maxrchung.com',
       ]
     });
 
