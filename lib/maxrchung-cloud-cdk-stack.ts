@@ -66,6 +66,7 @@ export class MaxrchungCloudCdkStack extends cdk.Stack {
     new s3.Bucket(this, 'database-backup', {
       bucketName: 'maxrchung-database-backup', // Has to be globally unique
       lifecycleRules: [{
+        id: 'database-lifecycle-rule',
         expiration: cdk.Duration.days(35),
       }],
     });
