@@ -8,6 +8,8 @@ import * as ecs from '@aws-cdk/aws-ecs'
 import * as targets from '@aws-cdk/aws-route53-targets'
 import * as logs from '@aws-cdk/aws-logs'
 import * as ssm from '@aws-cdk/aws-ssm'
+import * as backup from '@aws-cdk/aws-backup'
+import * as events from '@aws-cdk/aws-events'
 
 export class MaxrchungCloudCdkStack extends cdk.Stack {
   constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
@@ -43,7 +45,24 @@ export class MaxrchungCloudCdkStack extends cdk.Stack {
       keyName: 'cloud-key' // Key was manually created through console,
     })
 
-    ec2Instance.applyRemovalPolicy(cdk.RemovalPolicy.RETAIN)
+    // Run an EC2 backup once a week and retain for a month
+    const plan = new backup.BackupPlan(this, 'database-backup-plan', {
+      backupPlanName: 'database-backup-plan',
+      backupPlanRules: [
+        new backup.BackupPlanRule({
+          ruleName: 'database-backup-plan-rule',
+          deleteAfter: cdk.Duration.days(35),
+          scheduleExpression: events.Schedule.cron({ weekDay: 'THU', hour: '5', minute: '0' })
+        })
+      ],
+      backupVault: new backup.BackupVault(this, 'database-backup-vault', {
+        backupVaultName: 'database-backup-vault'
+      })
+    })
+    plan.addSelection('database-plan-selection', {
+      backupSelectionName: 'database-plan-selection',
+      resources: [backup.BackupResource.fromEc2Instance(ec2Instance)]
+    })
 
     new ec2.CfnEIP(this, 'database-elastic-ip', {
       instanceId: ec2Instance.instanceId
@@ -124,9 +143,11 @@ export class MaxrchungCloudCdkStack extends cdk.Stack {
       vpc
     })
 
-    const taskDefinition = new ecs.FargateTaskDefinition(this, 'cloud-task-definition')
+    const taskDefinition = new ecs.FargateTaskDefinition(this, 'cloud-task-definition', {
+      family: 'cloud-task-family'
+    })
 
-    const fargate = new ecs.FargateService(this, 'cloud--fargate', {
+    const fargate = new ecs.FargateService(this, 'cloud-fargate', {
       serviceName: 'cloud-fargate',
       cluster,
       desiredCount: 1,
@@ -190,28 +211,19 @@ export class MaxrchungCloudCdkStack extends cdk.Stack {
       portMappings: [{ containerPort: 4000 }]
     })
 
-    listener.addTargetGroups('add-maxrchung-rails-target-group', {
-      priority: 50000,
-      targetGroups: [
-        new elbv2.ApplicationTargetGroup(this, 'maxrchung-rails-target-group', {
-          targetGroupName: 'maxrchung-rails-target-group',
-          port: 3000,
-          vpc,
-          protocol: elbv2.ApplicationProtocol.HTTP,
-          targets: [fargate]
+    fargate.registerLoadBalancerTargets(
+      {
+        containerName: 'maxrchung-rails-container',
+        newTargetGroupId: 'maxrchung-rails-target-group',
+        listener: ecs.ListenerConfig.applicationListener(listener, {
+          priority: 100,
+          conditions: [elbv2.ListenerCondition.hostHeaders(['maxrchung.com', 'www.maxrchung.com'])]
         })
-      ],
-      conditions: [elbv2.ListenerCondition.hostHeaders(['maxrchung.com', 'www.maxrchung.com'])]
-    })
-
-    listener.addTargetGroups('add-thrustin-target-group', {
-      priority: 200,
-      targetGroups: [
-        new elbv2.ApplicationTargetGroup(this, 'thrustin-target-group', {
-          targetGroupName: 'thrustin-target-group',
-          port: 3012,
-          vpc,
-          protocol: elbv2.ApplicationProtocol.HTTP,
+      },
+      {
+        containerName: 'thrustin-container',
+        newTargetGroupId: 'thrustin-target-group',
+        listener: ecs.ListenerConfig.applicationListener(listener, {
           healthCheck: {
             // There is no health check endpoint on the backend. When you try and hit the root,
             // the backend is returning a 400 as it expects a websocket connection.
@@ -219,24 +231,18 @@ export class MaxrchungCloudCdkStack extends cdk.Stack {
             // Make logging less filled with web socket connection errors, max value is 300
             interval: cdk.Duration.seconds(300)
           },
-          targets: [fargate]
+          priority: 200,
+          conditions: [elbv2.ListenerCondition.hostHeaders(['thrustin.server.maxrchung.com'])]
         })
-      ],
-      conditions: [elbv2.ListenerCondition.hostHeaders(['thrustin.server.maxrchung.com'])]
-    })
-
-    listener.addTargetGroups('add-functional-vote-target-group', {
-      priority: 300,
-      targetGroups: [
-        new elbv2.ApplicationTargetGroup(this, 'functional-vote-target-group', {
-          targetGroupName: 'functional-vote-target-group',
-          port: 4000,
-          vpc,
-          protocol: elbv2.ApplicationProtocol.HTTP,
-          targets: [fargate]
+      },
+      {
+        containerName: 'functional-vote-container',
+        newTargetGroupId: 'functional-vote-target-group',
+        listener: ecs.ListenerConfig.applicationListener(listener, {
+          priority: 300,
+          conditions: [elbv2.ListenerCondition.hostHeaders(['functionalvote.api.maxrchung.com'])]
         })
-      ],
-      conditions: [elbv2.ListenerCondition.hostHeaders(['functionalvote.api.maxrchung.com'])]
-    })
+      }
+    )
   }
 }
