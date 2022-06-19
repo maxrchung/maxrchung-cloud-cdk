@@ -105,7 +105,10 @@ export class MaxrchungCloudCdkStack extends cdk.Stack {
         }),
         streamPrefix: 'maxrchung-rails-log'
       }),
-      portMappings: [{ containerPort: 3000 }]
+      portMappings: [{ containerPort: 3000 }],
+      healthCheck: {
+        command: ['CMD-SHELL', 'wget --no-verbose --tries=1 --spider http://localhost:3000 || exit 1']
+      }
     })
 
     containersTaskDefinition.addContainer('thrustin-container', {
@@ -121,7 +124,14 @@ export class MaxrchungCloudCdkStack extends cdk.Stack {
         }),
         streamPrefix: 'thrustin-log'
       }),
-      portMappings: [{ containerPort: 3012 }]
+      portMappings: [{ containerPort: 3012 }],
+      healthCheck: {
+        // WebSocket health check: https://stackoverflow.com/a/47357225
+        // Gist for curl flags: https://gist.github.com/eneko/dc2d8edd9a4b25c5b0725dd123f98b10
+        // cURL doesn't seem to automatically disconnect with "Connection: close", so I'm doing an -eq check for 28 (Operation timed out)
+        // Bash bracket reference: https://dev.to/rpalo/bash-brackets-quick-reference-4eh6
+        command: ['CMD-SHELL', 'curl -iN -m 3 -H "Connection: close" --header "Upgrade: websocket" -H "Sec-WebSocket-Key: SGVsbG8sIHdvcmxkIQ==" -H "Sec-WebSocket-Version: 13" http://localhost:3012; [ $? -eq 28 ] || exit 1']
+      }
     })
 
     containersTaskDefinition.addContainer('functional-vote-container', {
@@ -140,29 +150,47 @@ export class MaxrchungCloudCdkStack extends cdk.Stack {
         }),
         streamPrefix: 'functional-vote-log'
       }),
-      portMappings: [{ containerPort: 4000 }]
+      portMappings: [{ containerPort: 4000 }],
+      healthCheck: {
+        command: ['CMD-SHELL', 'wget --no-verbose --tries=1 --spider http://localhost:4000 || exit 1']
+      }
     })
 
-    containersTaskDefinition.addContainer('retro-container', {
-      containerName: 'retro-container',
-      image: ecs.ContainerImage.fromRegistry('maxrchung/retro'),
+    containersTaskDefinition.addContainer('retro-frontend-container', {
+      containerName: 'retro-frontend-container',
+      image: ecs.ContainerImage.fromRegistry('maxrchung/retro-frontend'),
+      logging: ecs.LogDriver.awsLogs({
+        logGroup: new logs.LogGroup(this, 'retro-frontend-log-group', {
+          logGroupName: 'retro-frontend-log-group',
+          retention: logs.RetentionDays.ONE_MONTH
+        }),
+        streamPrefix: 'retro-frontend-log'
+      }),
+      portMappings: [{ containerPort: 5001 }],
+      healthCheck: {
+        command: ['CMD-SHELL', 'wget --no-verbose --tries=1 --spider http://localhost:5001 || exit 1']
+      }
+    })
+
+    containersTaskDefinition.addContainer('retro-backend-container', {
+      containerName: 'retro-backend-container',
+      image: ecs.ContainerImage.fromRegistry('maxrchung/retro-backend'),
       environment: {
         AWS_ACCESS_KEY_ID: ssm.StringParameter.valueForStringParameter(this, 'maxrchung-aws-access-key-id'),
         AWS_SECRET_ACCESS_KEY: ssm.StringParameter.valueForStringParameter(this, 'maxrchung-aws-secret-access-key')
       },
       logging: ecs.LogDriver.awsLogs({
-        logGroup: new logs.LogGroup(this, 'retro-log-group', {
-          logGroupName: 'retro-log-group',
-          retention: logs.RetentionDays.ONE_MONTH,
-          removalPolicy: cdk.RemovalPolicy.DESTROY
+        logGroup: new logs.LogGroup(this, 'retro-backend-log-group', {
+          logGroupName: 'retro-backend-log-group',
+          retention: logs.RetentionDays.ONE_MONTH
         }),
-        streamPrefix: 'retro-log'
+        streamPrefix: 'retro-backend-log'
       }),
       portMappings: [{ containerPort: 5000 }],
       healthCheck: {
         // wget health check: https://stackoverflow.com/a/47722899
         // Apollo Server health check endpoint: https://www.apollographql.com/docs/apollo-server/monitoring/health-checks/#http-level-health-checks
-        command: ['CMD-SHELL', 'wget --no-verbose --tries=1 --spider http://127.0.0.1:5000/.well-known/apollo/server-health || exit 1']
+        command: ['CMD-SHELL', 'wget --no-verbose --tries=1 --spider http://localhost/.well-known/apollo/server-health || exit 1']
       }
     })
 
@@ -171,7 +199,10 @@ export class MaxrchungCloudCdkStack extends cdk.Stack {
       vpc,
       allowAllOutbound: true
     })
+    // EIP public IP
     containersSecurityGroup.addIngressRule(ec2.Peer.ipv4(databaseEip.ref + '/32'), ec2.Port.allTcp(), 'retro')
+    // Private IPs
+    containersSecurityGroup.addIngressRule(ec2.Peer.ipv4('10.0.0.0/16'), ec2.Port.allTcp(), 'retro')
 
     // Can't use EC2Service due to public access restrictions: https://stackoverflow.com/a/60885984
     const containersService = new ecs.FargateService(this, 'containers-fargate', {
