@@ -186,7 +186,7 @@ export class MaxrchungCloudCdkStack extends cdk.Stack {
       healthCheck: {
         // wget health check: https://stackoverflow.com/a/47722899
         // Apollo Server health check endpoint: https://www.apollographql.com/docs/apollo-server/monitoring/health-checks/#http-level-health-checks
-        command: ['CMD-SHELL', 'wget --no-verbose --tries=1 --spider http://localhost/.well-known/apollo/server-health || exit 1']
+        command: ['CMD-SHELL', 'wget --no-verbose --tries=1 --spider http://localhost:5000/.well-known/apollo/server-health || exit 1']
       }
     })
 
