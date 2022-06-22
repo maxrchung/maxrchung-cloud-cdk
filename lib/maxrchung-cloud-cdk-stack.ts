@@ -131,7 +131,10 @@ export class MaxrchungCloudCdkStack extends cdk.Stack {
         // Gist for curl flags: https://gist.github.com/eneko/dc2d8edd9a4b25c5b0725dd123f98b10
         // cURL doesn't seem to automatically disconnect with "Connection: close", so I'm doing an -eq check for 28 (Operation timed out)
         // Bash bracket reference: https://dev.to/rpalo/bash-brackets-quick-reference-4eh6
-        command: ['CMD-SHELL', 'curl -iN -m 3 -H "Connection: close" --header "Upgrade: websocket" -H "Sec-WebSocket-Key: SGVsbG8sIHdvcmxkIQ==" -H "Sec-WebSocket-Version: 13" http://localhost:3012; [ $? -eq 28 ] || exit 1']
+        command: [
+          'CMD-SHELL',
+          'curl -iN -m 3 -H "Connection: close" --header "Upgrade: websocket" -H "Sec-WebSocket-Key: SGVsbG8sIHdvcmxkIQ==" -H "Sec-WebSocket-Version: 13" http://localhost:3012; [ $? -eq 28 ] || exit 1'
+        ]
       }
     })
 
@@ -245,11 +248,20 @@ export class MaxrchungCloudCdkStack extends cdk.Stack {
     })
     memoryAlarm.addAlarmAction(new actions.SnsAction(alarmTopic))
 
-    const dashboard = new cloudwatch.Dashboard(this, 'cloud-dashboard', {
+    new cloudwatch.Dashboard(this, 'cloud-dashboard', {
       dashboardName: 'cloud-dashboard',
       start: '-P1W',
       widgets: [
         [
+          new cloudwatch.GraphWidget({
+            left: [
+              getAmplifyRequestMetric('d20h2n9aumnj9l', 's2vx'),
+              getAmplifyRequestMetric('d301c72cf84tpu', 'thrustin'),
+              getAmplifyRequestMetric('dnkcptluwwd9v', 'functionalvote'),
+              getAmplifyRequestMetric('dt345ak59o17f', 'snake')
+            ],
+            title: 'amplify-daily-sum-requests'
+          }),
           new cloudwatch.GraphWidget({
             left: [cpuMetric],
             leftAnnotations: [cpuAlarm.toAnnotation()],
@@ -265,3 +277,15 @@ export class MaxrchungCloudCdkStack extends cdk.Stack {
     })
   }
 }
+
+const getAmplifyRequestMetric = (amplifyId: string, siteName: string) =>
+  new cloudwatch.Metric({
+    namespace: 'AWS/AmplifyHosting',
+    metricName: 'Requests',
+    dimensionsMap: {
+      App: amplifyId
+    },
+    period: cdk.Duration.days(1),
+    statistic: 'sum',
+    label: siteName
+  })
