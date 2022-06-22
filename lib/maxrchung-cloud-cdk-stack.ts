@@ -7,6 +7,10 @@ import * as logs from '@aws-cdk/aws-logs'
 import * as ssm from '@aws-cdk/aws-ssm'
 import * as backup from '@aws-cdk/aws-backup'
 import * as servicediscovery from '@aws-cdk/aws-servicediscovery'
+import * as cloudwatch from '@aws-cdk/aws-cloudwatch'
+import * as sns from '@aws-cdk/aws-sns'
+import * as subscriptions from '@aws-cdk/aws-sns-subscriptions'
+import * as actions from '@aws-cdk/aws-cloudwatch-actions'
 
 export class MaxrchungCloudCdkStack extends cdk.Stack {
   constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
@@ -79,6 +83,7 @@ export class MaxrchungCloudCdkStack extends cdk.Stack {
       vpc
     })
 
+    // May need to up the memory limit
     const containersTaskDefinition = new ecs.FargateTaskDefinition(this, 'containers-task-definition', {
       family: 'containers-family'
     })
@@ -215,6 +220,48 @@ export class MaxrchungCloudCdkStack extends cdk.Stack {
         })
       },
       securityGroups: [containersSecurityGroup]
+    })
+
+    const alarmTopic = new sns.Topic(this, 'alarm-sns-topic', {
+      displayName: 'alarm-sns-topic',
+      topicName: 'alarm-sns-topic'
+    })
+
+    alarmTopic.addSubscription(new subscriptions.EmailSubscription('maxrchung@gmail.com'))
+
+    const cpuMetric = containersService.metricCpuUtilization()
+    const cpuAlarm = cpuMetric.createAlarm(this, 'containers-cpu-alarm', {
+      alarmName: 'containers-cpu-alarm',
+      evaluationPeriods: 1,
+      threshold: 90
+    })
+    cpuAlarm.addAlarmAction(new actions.SnsAction(alarmTopic))
+
+    const memoryMetric = containersService.metricMemoryUtilization()
+    const memoryAlarm = memoryMetric.createAlarm(this, 'containers-memory-alarm', {
+      alarmName: 'containers-memory-alarm',
+      evaluationPeriods: 1,
+      threshold: 90
+    })
+    memoryAlarm.addAlarmAction(new actions.SnsAction(alarmTopic))
+
+    const dashboard = new cloudwatch.Dashboard(this, 'cloud-dashboard', {
+      dashboardName: 'cloud-dashboard',
+      start: '-P1W',
+      widgets: [
+        [
+          new cloudwatch.GraphWidget({
+            left: [cpuMetric],
+            leftAnnotations: [cpuAlarm.toAnnotation()],
+            title: 'fargate-5-min-average-cpu-utilization'
+          }),
+          new cloudwatch.GraphWidget({
+            left: [memoryMetric],
+            leftAnnotations: [memoryAlarm.toAnnotation()],
+            title: 'fargate-5-min-average-memory-utilization'
+          })
+        ]
+      ]
     })
   }
 }
