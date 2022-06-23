@@ -85,7 +85,11 @@ export class MaxrchungCloudCdkStack extends cdk.Stack {
 
     // May need to up the memory limit
     const containersTaskDefinition = new ecs.FargateTaskDefinition(this, 'containers-task-definition', {
-      family: 'containers-family'
+      family: 'containers-family',
+      runtimePlatform: {
+        cpuArchitecture: ecs.CpuArchitecture.ARM64, // Cheaper than x86
+        operatingSystemFamily: ecs.OperatingSystemFamily.LINUX
+      }
     })
 
     containersTaskDefinition.addContainer('maxrchung-rails-container', {
