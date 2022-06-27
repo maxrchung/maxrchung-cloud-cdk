@@ -239,10 +239,11 @@ export class MaxrchungCloudCdkStack extends cdk.Stack {
         [
           new cloudwatch.GraphWidget({
             left: [
-              getAmplifyRequestMetric('d20h2n9aumnj9l', 's2vx'),
               getAmplifyRequestMetric('d301c72cf84tpu', 'thrustin'),
               getAmplifyRequestMetric('dnkcptluwwd9v', 'functionalvote'),
-              getAmplifyRequestMetric('dt345ak59o17f', 'snake')
+              getAmplifyRequestMetric('dt345ak59o17f', 'snake'),
+              getAmplifyRequestMetric('d20h2n9aumnj9l', 's2vx'),
+              getAmplifyRequestMetric('d3kobw31x2ygcb', 'retro')
             ],
             title: 'amplify-daily-sum-requests'
           }),
