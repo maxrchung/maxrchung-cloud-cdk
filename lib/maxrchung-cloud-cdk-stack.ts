@@ -160,22 +160,6 @@ export class MaxrchungCloudCdkStack extends cdk.Stack {
       }
     })
 
-    containersTaskDefinition.addContainer('retro-frontend-container', {
-      containerName: 'retro-frontend-container',
-      image: ecs.ContainerImage.fromRegistry('maxrchung/retro-frontend'),
-      logging: ecs.LogDriver.awsLogs({
-        logGroup: new logs.LogGroup(this, 'retro-frontend-log-group', {
-          logGroupName: 'retro-frontend-log-group',
-          retention: logs.RetentionDays.ONE_MONTH
-        }),
-        streamPrefix: 'retro-frontend-log'
-      }),
-      portMappings: [{ containerPort: 5001 }],
-      healthCheck: {
-        command: ['CMD-SHELL', 'wget --no-verbose --tries=1 --spider http://localhost:5001 || exit 1']
-      }
-    })
-
     containersTaskDefinition.addContainer('retro-backend-container', {
       containerName: 'retro-backend-container',
       image: ecs.ContainerImage.fromRegistry('maxrchung/retro-backend'),
